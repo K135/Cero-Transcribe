@@ -205,6 +205,12 @@ Whisper models and whisper.cpp are subject to their own licenses (MIT / model ca
 
 ---
 
+## Author
+
+Built by **Karthik** — [LinkedIn](https://in.linkedin.com/in/kmzak)
+
+---
+
 ## Credits
 
 - [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — local ASR  
