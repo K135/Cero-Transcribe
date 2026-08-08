@@ -38,14 +38,27 @@ python run.py
 
 Look for **🎙️** in the menu bar.
 
-### Build a DMG (optional)
+## Install from DMG (recommended)
+
+No Homebrew, Python, or whisper-cpp required on your Mac.
+
+1. Download **[Cero-Transcribe-Install.dmg](https://github.com/K135/Cero-Transcribe/releases)** (or build it below).
+2. Open the DMG → drag **Cero-Transcribe** into **Applications**.
+3. Open **Applications → Cero-Transcribe**  
+   (First launch: **Right-click → Open** if macOS blocks an unidentified developer.)
+4. Look for **🎙️** in the menu bar (no Dock icon).
+5. Grant **Microphone**, **Accessibility**, and **Input Monitoring** when prompted.
+6. Click into a text field → click **🎙️** (or press **Right Option**) → speak.
+
+That’s it: **install → permissions → use.** Fully offline after install.
+
+### Build the DMG yourself
 
 ```bash
+brew install portaudio whisper-cpp   # build machine only
 bash scripts/build_mac_dmg.sh
-open dist/Cerotrans-Install.dmg   # drag into Applications
+open dist/Cero-Transcribe-Install.dmg
 ```
-
-The app is ad-hoc signed (not Apple-notarized). First open: **Right-click → Open**.
 
 ---
 

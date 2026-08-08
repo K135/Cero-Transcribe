@@ -12,7 +12,7 @@ from AppKit import NSApp
 from Foundation import NSObject
 import objc
 
-from .config import LOG_FILE, VOCAB_FILE, ensure_support_dir
+from .config import LOG_FILE, SUPPORT, VOCAB_FILE, ensure_support_dir
 from .focus import FocusTracker
 from .glow import EdgeGlow
 from .hotkey import HOTKEY_LABEL, UNDO_LABEL, HotkeyListener
@@ -148,9 +148,50 @@ class CerotransApp(rumps.App):
         self._model_ready = threading.Event()
         self._meter_timer = rumps.Timer(self._on_meter_tick, 0.2)
         threading.Thread(target=self._load_initial_model, daemon=True).start()
-        threading.Thread(target=self._ensure_permissions, daemon=True).start()
+        threading.Thread(target=self._first_run_and_permissions, daemon=True).start()
 
     # -- lifecycle -------------------------------------------------------
+
+    def _first_run_and_permissions(self) -> None:
+        """Install → permissions → use. Show a one-time welcome, then prompt TCC."""
+        import time
+
+        ensure_support_dir()
+        marker = SUPPORT / "welcomed.v1"
+        first = not marker.exists()
+        # Let the menu bar icon appear before dialogs
+        time.sleep(1.2)
+        if first:
+            try:
+                rumps.alert(
+                    title="Welcome to Cero-Transcribe",
+                    message=(
+                        "Fully offline voice typing for your Mac.\n\n"
+                        "Next, macOS will ask for permissions:\n"
+                        "  1. Microphone — hear you\n"
+                        "  2. Accessibility — type into other apps\n"
+                        "  3. Input Monitoring — hotkeys\n\n"
+                        "Then click 🎙️ in the menu bar (or press Right Option) and speak.\n\n"
+                        "You can re-open Settings anytime via:\n"
+                        "🎙️ → Grant Permissions…"
+                    ),
+                    ok="Continue",
+                )
+                marker.write_text("1", encoding="utf-8")
+            except Exception:
+                log.exception("Welcome dialog failed")
+        status = ensure_all(prompt=True)
+        log.info("Permissions: %s", status_summary(status))
+        if not status.ready:
+            _notify(
+                "Permissions needed",
+                "Enable Accessibility (+ Mic & Input Monitoring). Menu → Grant Permissions…",
+            )
+        elif first:
+            _notify(
+                "Ready",
+                "Click 🎙️ (or Right Option), then speak into any text field.",
+            )
 
     def _load_initial_model(self) -> None:
         try:
@@ -170,15 +211,6 @@ class CerotransApp(rumps.App):
         except Exception as exc:
             log.exception("Model load failed")
             _notify("Model missing", str(exc))
-
-    def _ensure_permissions(self) -> None:
-        status = ensure_all(prompt=True)
-        log.info("Permissions: %s", status_summary(status))
-        if not status.ready:
-            _notify(
-                "Permissions needed",
-                "Enable Accessibility (+ Mic & Input Monitoring). Menu → Grant Permissions…",
-            )
 
     def _on_wake_detected(self) -> None:
         log.info("Hey Cero detected")

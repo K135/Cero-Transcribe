@@ -1,5 +1,6 @@
 #!/bin/bash
-# Cerotrans — menu-bar agent launcher (LSUIElement; no Dock icon).
+# Cero-Transcribe — menu-bar agent launcher (LSUIElement; no Dock icon).
+# Fully self-contained: bundled Python, whisper, models. No Homebrew required.
 set -uo pipefail
 
 CONTENTS="$(cd "$(dirname "$0")/.." && pwd)"
@@ -29,17 +30,19 @@ export CEROTRANS_WHISPER_CLI="${WHISPER_BIN}"
 if [[ -x "${WHISPER_SERVER}" ]]; then
   export CEROTRANS_WHISPER_SERVER="${WHISPER_SERVER}"
 fi
-# Bundled whisper-cli loads ggml backends from the same directory (bin/).
+# Bundled whisper loads ggml backends from bin/ next to the executable.
 export DYLD_LIBRARY_PATH="${RESOURCES}/whisper/lib${DYLD_LIBRARY_PATH:+:$DYLD_LIBRARY_PATH}"
 export DYLD_FALLBACK_LIBRARY_PATH="${RESOURCES}/whisper/lib${DYLD_FALLBACK_LIBRARY_PATH:+:$DYLD_FALLBACK_LIBRARY_PATH}"
 
 log "CONTENTS=${CONTENTS}"
 log "ARCH=$(uname -m)"
+log "BUNDLE=${CEROTRANS_APP_BUNDLE}"
 
-[[ -x "${VENV_PY}" ]] || die "Missing embedded Python at Resources/venv."
-[[ -d "${PROJECT}" ]] || die "App is damaged: missing Resources/project."
-[[ -x "${WHISPER_BIN}" ]] || die "Missing bundled whisper-cli. Rebuild the DMG."
-[[ -d "${MODELS}" ]] || die "Missing bundled models."
+[[ -x "${VENV_PY}" ]] || die "Missing embedded Python at Resources/venv. Reinstall from the DMG."
+[[ -d "${PROJECT}" ]] || die "App is damaged: missing Resources/project. Reinstall from the DMG."
+[[ -x "${WHISPER_BIN}" ]] || die "Missing bundled whisper-cli. Reinstall from the DMG."
+[[ -x "${WHISPER_SERVER}" ]] || die "Missing bundled whisper-server. Reinstall from the DMG."
+[[ -f "${MODELS}/ggml-tiny.en.bin" ]] || die "Missing bundled speech model. Reinstall from the DMG."
 
 cd "${PROJECT}" || die "Cannot enter project: ${PROJECT}"
 log "Launching menu bar agent…"
