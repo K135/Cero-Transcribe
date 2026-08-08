@@ -1,6 +1,7 @@
 """Low-CPU 'Hey Cero' / 'Hey Sero' wake-word watcher.
 
 Idle: mic energy only. Whisper runs only after voice is detected.
+Strict matching — must sound like “Hey Cero”, never “bye Cero”.
 """
 
 from __future__ import annotations
@@ -20,25 +21,29 @@ from .transcriber import Transcriber
 
 log = logging.getLogger("cerotrans.wake")
 
-# "Cero" is pronounced like "Sero" — include common Whisper mishearings.
-_NAME = (
-    r"cero|sero|sarah|sara|zero|sierra|ciro|sera|cerro|cairo|"
-    r"surah|caro|sparrow|sirro|searo|seera|saro|zaro|cheerio"
-)
+# Names Whisper commonly hears for “Cero”. Keep tight — no “cheerio” etc.
+_NAME = r"cero|sero|zero|ciro|cerro|searo|saro"
+
+# Require an explicit attention word + the name. Never match bare “Cero”
+# or “bye Cero” / “to Cero”.
 _WAKE_RE = re.compile(
-    rf"\bhey\s*(?:there\s+)?(?:{_NAME})\b|"
-    rf"\b(?:ok|okay|hi|hello)\s+(?:{_NAME})\b|"
-    rf"\b(?:{_NAME})\s*,?\s*(?:start|listen|dictate)?\b",
+    rf"\b(?:hey|hi|hello|okay|ok)\s+(?:there\s+)?(?:{_NAME})\b",
     re.IGNORECASE,
 )
 
-# Softer gate so quiet "Hey Cero" still triggers
-VOICE_RMS = 0.008
-VOICE_HOLD_S = 0.18
-CAPTURE_S = 2.0
-COOLDOWN_S = 2.0
+# Reject common false starts that Whisper confuses with the wake phrase.
+_REJECT_RE = re.compile(
+    r"\b(?:bye|goodbye|good\s*bye|by|buy|to|too|two|for|from|about)\b",
+    re.IGNORECASE,
+)
+
+VOICE_RMS = 0.012  # slightly higher — ignore quiet room noise
+VOICE_HOLD_S = 0.22
+CAPTURE_S = 1.6
+COOLDOWN_S = 5.0  # after a hit (or strong false alarm)
 IDLE_POLL_S = 0.05
-WAKE_PROMPT = "Hey Cero. Hey Sero. Hey Zero."
+# Soft prompt only — do NOT bias Whisper into inventing “hey cero”
+WAKE_PROMPT = "Wake phrase."
 
 
 def is_wake_phrase(text: str) -> bool:
@@ -47,16 +52,17 @@ def is_wake_phrase(text: str) -> bool:
     t = re.sub(r"\s+", " ", t).strip()
     if not t:
         return False
+    # “bye to Cero”, “goodbye Cero”, etc. must never start dictation
+    if _REJECT_RE.search(t):
+        return False
     if _WAKE_RE.search(t):
         return True
-    # Very short utterances that are just the name after hey-ish noise
+    # Short utterance: exactly attention + name (2–3 words)
     words = t.split()
-    if len(words) <= 4 and any(w in t for w in ("cero", "sero", "zero", "sarah", "sierra")):
-        if any(w in words for w in ("hey", "hi", "hello", "ok", "okay")) or words[0] in (
-            "cero",
-            "sero",
-            "zero",
-        ):
+    if 2 <= len(words) <= 3:
+        attn = {"hey", "hi", "hello", "ok", "okay"}
+        names = {"cero", "sero", "zero", "ciro", "cerro", "searo", "saro"}
+        if words[0] in attn and any(w in names for w in words[1:]):
             return True
     return False
 
@@ -69,7 +75,7 @@ class WakeWordWatcher:
     ) -> None:
         self.transcriber = transcriber
         self.on_wake = on_wake
-        self._enabled = True
+        self._enabled = False
         self._paused = False
         self._stop = threading.Event()
         self._thread: threading.Thread | None = None
@@ -91,7 +97,7 @@ class WakeWordWatcher:
         self._paused = False
         self._thread = threading.Thread(target=self._loop, name="cerotrans-wake", daemon=True)
         self._thread.start()
-        log.info("Wake watcher started (listen for Hey Cero / Hey Sero)")
+        log.info("Wake watcher started (opt-in Hey Cero / Hey Sero)")
 
     def stop(self) -> None:
         self._stop.set()
@@ -155,7 +161,7 @@ class WakeWordWatcher:
                                 log.exception("on_wake failed")
                             self._paused = True
                             continue
-                    cooldown_until = time.monotonic() + 0.6
+                    cooldown_until = time.monotonic() + 1.0
             else:
                 voiced_since = None
 
@@ -221,7 +227,7 @@ class WakeWordWatcher:
 
     def _snapshot_capture(self) -> np.ndarray:
         # Keep listening briefly so "Hey Cero" finishes into the buffer
-        deadline = time.monotonic() + 0.85
+        deadline = time.monotonic() + 0.7
         while time.monotonic() < deadline and not self._stop.is_set():
             time.sleep(0.05)
         with self._lock:
@@ -233,7 +239,6 @@ class WakeWordWatcher:
 
     def _check_wake(self, samples: np.ndarray) -> bool:
         try:
-            # Force wake-oriented prompt so Whisper prefers "Cero/Sero"
             raw = self.transcriber.transcribe(samples, context=WAKE_PROMPT)
             text = strip_special_tokens(raw or "").lower().strip()
             hit = is_wake_phrase(text)

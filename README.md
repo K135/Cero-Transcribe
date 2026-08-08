@@ -75,18 +75,43 @@ If dictation starts but nothing appears in Chrome/Notes, Accessibility is almost
 ## How to use
 
 1. Click into a text field.
-2. Click **🎙️** (or tap **Right Option**) — icon turns 🔴, right-edge glow appears.
+2. **Left-click** 🎙️ (or press **Right Option**) — icon turns 🔴, right-edge glow appears.
 3. Speak. After a short pause, text is pasted.
-4. Click **🎙️** again to stop — glow disappears.
-5. **Right-click** the icon for models, vocabulary, wake word, login item, permissions.
+4. Left-click 🎙️ again to stop — glow disappears.
+5. **Right-click** 🎙️ for the full options menu.
 
 | Control | Action |
 |---------|--------|
-| Click 🎙️ | Start / Stop |
-| Right Option | Start / Stop |
-| Shift+F3 | Start / Stop (alternate) |
+| Left-click 🎙️ | Start / Stop |
+| Right-click 🎙️ | Options menu |
+| Right Option | Start / Stop (default shortcut) |
 | ⌘⇧U | Undo last dictated phrase |
-| Right-click 🎙️ | Full menu |
+
+### Menu options (right-click 🎙️)
+
+| Option | What it does |
+|--------|----------------|
+| **▶ Start Recording** / **⏹ Stop Recording** | Start or stop dictation |
+| **Undo last (Cmd+Shift+U)** | Remove the last pasted phrase |
+| **Hey Cero: On / Off** | Hands-free wake word (*Hey Cero* / *Hey Sero*). **Off by default** |
+| **Toggle shortcut** | Pick how you start/stop (checkmark = active) |
+| → Right Option | Default |
+| → Left Option | |
+| → Shift+F3 | |
+| → F5 / F6 | |
+| → Ctrl+Space | |
+| → Cmd+Shift+Space | |
+| → Cmd+Shift+D | |
+| **Set Custom Shortcut…** | Capture any key combo you want |
+| **Status: …** | Idle / Recording (live) |
+| **Mic: ▱▱▱…** | Live mic level meter |
+| **Tiny EN** | Faster model (older Macs) |
+| **Base EN** | Best accuracy — **default** ✓ |
+| **Clear Context (new email)** | Reset capitalization / history for a new doc |
+| **Edit Vocabulary…** | Custom words + corrections |
+| **Launch at Login** | Open Cero-Transcribe when you log in |
+| **Grant Permissions…** | Re-check Mic / Accessibility / Input Monitoring |
+| **Quit Cero-Transcribe** | Exit the app |
 
 ### Voice commands
 

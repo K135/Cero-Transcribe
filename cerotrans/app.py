@@ -68,7 +68,7 @@ def _notify(subtitle: str, message: str) -> None:
 
 
 class _StatusClickProxy(NSObject):
-    """Left-click status item → toggle; right-click keeps the menu."""
+    """Left-click → toggle. Right-click uses the attached NSMenu."""
 
     def initWithApp_(self, app):
         self = objc.super(_StatusClickProxy, self).init()
@@ -78,21 +78,7 @@ class _StatusClickProxy(NSObject):
         return self
 
     def statusItemClicked_(self, sender):  # noqa: N802
-        try:
-            event = NSApp.currentEvent()
-            from AppKit import NSEventTypeRightMouseUp, NSEventModifierFlagControl
-
-            if event is not None:
-                etype = event.type()
-                mods = event.modifierFlags()
-                if etype == NSEventTypeRightMouseUp or (mods & NSEventModifierFlagControl):
-                    item = getattr(self._app, "_status_item", None)
-                    menu = getattr(self._app, "_saved_menu", None)
-                    if item is not None and menu is not None:
-                        item.popUpStatusItemMenu_(menu)
-                    return
-        except Exception:
-            pass
+        # sendActionOn_ is LeftMouseUp only, so this is a single left-click.
         self._app._on_toggle()
 
 
@@ -122,8 +108,8 @@ class CerotransApp(rumps.App):
         self.action_item = rumps.MenuItem(START_LABEL, callback=self._on_action_clicked)
         self.undo_item = rumps.MenuItem(f"Undo last  ({UNDO_LABEL})", callback=self._on_undo_clicked)
 
-        wake_on = bool(self._settings.get("wake_enabled", True))
-        self.wake_item = rumps.MenuItem("Hey Cero: On", callback=self._on_wake_toggle)
+        wake_on = bool(self._settings.get("wake_enabled", False))
+        self.wake_item = rumps.MenuItem("Hey Cero: Off", callback=self._on_wake_toggle)
         self.wake_item.state = 1 if wake_on else 0
 
         toggle_spec = str(self._settings.get("toggle_shortcut") or "alt_r")
@@ -249,7 +235,7 @@ class CerotransApp(rumps.App):
             log.info("Model ready: %s", name)
             # Start low-CPU Hey Cero watcher once model is ready
             self._wake = WakeWordWatcher(self.transcriber, on_wake=self._on_wake_detected)
-            self._wake.set_enabled(bool(self._settings.get("wake_enabled", True)))
+            self._wake.set_enabled(bool(self._settings.get("wake_enabled", False)))
             self._wake.start()
             # Glow only while dictating — never while idle/armed
         except Exception as exc:
@@ -322,9 +308,40 @@ class CerotransApp(rumps.App):
             self.glow.hide()
         _notify("Hey Cero", "Listening for “Hey Cero”" if enabled else "Stopped")
 
-    def _wire_status_click(self) -> None:
-        """Left-click toggles; right-click / ctrl-click opens the menu."""
+    def _ns_menu(self):
+        """Return the AppKit NSMenu for the status item (from rumps)."""
+        rumps_menu = getattr(self, "_menu", None)
+        if rumps_menu is not None:
+            ns = getattr(rumps_menu, "_menu", None)
+            if ns is not None:
+                return ns
+        status = getattr(getattr(self, "_nsapp", None), "nsstatusitem", None)
+        if status is not None:
+            return status.menu()
+        return None
+
+    def _popup_status_menu(self) -> None:
+        """Force-show the status menu (right-click / double-click / ctrl-click)."""
         try:
+            status = getattr(self, "_status_item", None) or getattr(
+                getattr(self, "_nsapp", None), "nsstatusitem", None
+            )
+            menu = self._ns_menu()
+            if status is None or menu is None:
+                log.warning("No status menu to pop up (status=%s menu=%s)", status, menu)
+                return
+            # Ensure it's attached, then pop it up under the icon
+            status.setMenu_(menu)
+            status.popUpStatusItemMenu_(menu)
+            log.info("Status menu popped up (%s items)", menu.numberOfItems())
+        except Exception:
+            log.exception("Failed to pop up status menu")
+
+    def _wire_status_click(self) -> None:
+        """Left-click / single-click toggles. Right-click opens the options menu."""
+        try:
+            from AppKit import NSEventMaskLeftMouseUp
+
             status = getattr(getattr(self, "_nsapp", None), "nsstatusitem", None)
             if status is None:
                 log.warning("Could not find NSStatusItem for click wiring")
@@ -333,14 +350,25 @@ class CerotransApp(rumps.App):
             button = status.button()
             if button is None:
                 return
-            # Detach menu from left-click; we pop it up manually on right-click.
-            self._saved_menu = status.menu()
-            status.setMenu_(None)
+
+            menu = self._ns_menu()
+            self._saved_menu = menu
+            if menu is None:
+                log.warning("Status NSMenu missing")
+                return
+
+            # Keep menu attached → AppKit shows it on right-click / ctrl-click.
+            status.setMenu_(menu)
+
+            # Left-click only → toggle (does not open the menu).
             proxy = _StatusClickProxy.alloc().initWithApp_(self)
             self._click_proxy = proxy  # retain
             button.setTarget_(proxy)
             button.setAction_("statusItemClicked:")
-            log.info("Status item click wired for toggle")
+            button.sendActionOn_(int(NSEventMaskLeftMouseUp))
+
+            n = int(menu.numberOfItems())
+            log.info("Status click wired: left=toggle, right=menu (%s items)", n)
         except Exception:
             log.exception("Failed wiring status click")
 
