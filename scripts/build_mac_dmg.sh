@@ -267,6 +267,29 @@ assert dylibs, "sounddevice missing bundled PortAudio"
 print("bundled PortAudio:", dylibs[0].name)
 PY
 
+# Make the runtime interpreter show up as "Cero-Transcribe" in macOS
+# Privacy prompts (not "python3.12"). Use a symlink so @rpath still works.
+echo "Linking Cero-Transcribe-named Python for permission dialogs…"
+VENV_BIN="${RESOURCES}/venv/bin"
+(
+  cd "${VENV_BIN}"
+  # Resolve which pythonX.Y exists in this venv
+  TARGET=""
+  for cand in python3.12 python3.11 python3.10 python3; do
+    if [[ -e "${cand}" ]]; then
+      TARGET="${cand}"
+      break
+    fi
+  done
+  [[ -n "${TARGET}" ]] || { echo "No python3.* in venv" >&2; exit 1; }
+  ln -sfn "${TARGET}" "Cero-Transcribe"
+  ln -sfn "${TARGET}" "CeroTranscribe"
+  ls -la "Cero-Transcribe" "CeroTranscribe"
+)
+# Ensure launcher can find libpython when DYLD path is set for whisper
+# (python lib must come first — see launcher.sh)
+"${VENV_BIN}/Cero-Transcribe" -c "import sys; print('named interpreter ok', sys.version.split()[0])"
+
 # Ad-hoc sign
 codesign --force --deep --sign - "${APP}" 2>/dev/null || true
 xattr -cr "${APP}" 2>/dev/null || true
