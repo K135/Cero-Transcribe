@@ -8,22 +8,21 @@ Powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Menu-bar onl
 
 ---
 
-## Why Cero-Transcribe
+## Download
 
-| | |
-|---|---|
-| **Fully offline** | Audio never uploads. Models run on your Mac. |
-| **Live typing** | Phrases paste into the focused app as you pause. |
-| **Warm Whisper** | Keeps `whisper-server` loaded so the last sentence doesn’t stall on a cold model load. |
-| **Voice edits** | Say *delete*, *delete the last sentence*, *comma*, *period*… |
-| **Polished output** | Stutter collapse, ratio fixes (`3 is to 2` → `3:2`), spacing, spoken punctuation. |
-| **Immersive glow** | Right-edge glow only while you’re actively dictating. |
+**👉 [Download Cero-Transcribe-Install.dmg](https://github.com/K135/Cero-Transcribe/releases/latest)**
 
----
+Fully self-contained macOS app. No Homebrew, Python, or other installs.
 
-## Quick start (developers)
+1. Open the DMG → drag **Cero-Transcribe** into **Applications**.
+2. Launch it (Right-click → **Open** the first time).
+3. Grant **Microphone**, **Accessibility**, and **Input Monitoring** when prompted.
+4. Click into a text field → click **🎙️** (or press **Right Option**) → speak.
 
-**Requirements:** macOS 11+, Python 3.10+, [Homebrew](https://brew.sh)
+**Install → permissions → use.** Everything runs offline after that.
+
+<details>
+<summary>Developer install (from source)</summary>
 
 ```bash
 brew install portaudio whisper-cpp
@@ -36,29 +35,20 @@ pip install -r requirements.txt
 python run.py
 ```
 
-Look for **🎙️** in the menu bar.
+</details>
 
-## Install from DMG (recommended)
+---
 
-No Homebrew, Python, or whisper-cpp required on your Mac.
+## Why Cero-Transcribe
 
-1. Download **[Cero-Transcribe-Install.dmg](https://github.com/K135/Cero-Transcribe/releases/latest)** (~292 MB).
-2. Open the DMG → drag **Cero-Transcribe** into **Applications**.
-3. Open **Applications → Cero-Transcribe**  
-   (First launch: **Right-click → Open** if macOS blocks an unidentified developer.)
-4. Look for **🎙️** in the menu bar (no Dock icon).
-5. Grant **Microphone**, **Accessibility**, and **Input Monitoring** when prompted.
-6. Click into a text field → click **🎙️** (or press **Right Option**) → speak.
-
-That’s it: **install → permissions → use.** Fully offline after install.
-
-### Build the DMG yourself
-
-```bash
-brew install portaudio whisper-cpp   # build machine only
-bash scripts/build_mac_dmg.sh
-open dist/Cero-Transcribe-Install.dmg
-```
+| | |
+|---|---|
+| **Fully offline** | Audio never uploads. Models run on your Mac. |
+| **Live typing** | Phrases paste into the focused app as you pause. |
+| **Warm Whisper** | Keeps `whisper-server` loaded so the last sentence doesn’t stall on a cold model load. |
+| **Voice edits** | Say *delete*, *delete the last sentence*, *comma*, *period*… |
+| **Polished output** | Stutter collapse, ratio fixes (`3 is to 2` → `3:2`), spacing, spoken punctuation. |
+| **Immersive glow** | Right-edge glow only while you’re actively dictating. |
 
 ---
 
@@ -115,10 +105,10 @@ Say these as their **own phrase** (pause before/after):
 
 | Model | Best for |
 |-------|----------|
-| **Tiny EN** (default) | Speed — snappy live phrases |
-| **Base EN** | Accuracy — slightly slower |
+| **Base EN (default)** | Best accuracy — clean emails, docs, code notes |
+| **Tiny EN** | Maximum speed on older Macs |
 
-Menu → pick a model. Cero-Transcribe warms a local `whisper-server` so phrases don’t reload weights every time.
+Menu → pick a model. Cero-Transcribe keeps a local `whisper-server` warm so phrases land fast without reloading the model.
 
 ### Vocabulary
 

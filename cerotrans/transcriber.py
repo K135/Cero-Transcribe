@@ -27,8 +27,9 @@ MODEL_FILES = {
     "Base EN": "ggml-base.en.bin",
 }
 
-# Tiny is snappy for live dictation; Base stays in the menu for accuracy.
-DEFAULT_MODEL = "Tiny EN"
+# Base EN is the quality default for clean dictation; Tiny stays in the menu
+# for maximum speed on very old Macs.
+DEFAULT_MODEL = "Base EN"
 
 
 def _default_models_dir() -> Path:

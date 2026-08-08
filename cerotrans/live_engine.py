@@ -145,6 +145,19 @@ class LiveEngine:
             if voiced:
                 silence_started = None
                 if speech_started is None:
+                    # New speech started. If we still hold uncommitted audio
+                    # (a previous sentence), commit it NOW so the last
+                    # sentence lands as soon as you start speaking again —
+                    # it never waits for the next sentence to finish.
+                    if (
+                        pending.size >= min_n
+                        and _has_voice(pending)
+                        and not self._busy.locked()
+                    ):
+                        ok = self._emit(pending, replacements, self._should_capitalize())
+                        self._cursor = snap.size
+                        if ok:
+                            had_real = True
                     speech_started = now
                 if pending.size >= max_n:
                     ok = self._emit(pending, replacements, self._should_capitalize())
@@ -207,8 +220,8 @@ class LiveEngine:
         capitalize: bool,
     ) -> bool:
         if not self._busy.acquire(blocking=False):
-            # Previous emit still running — wait briefly so we don't drop the last phrase
-            if not self._busy.acquire(timeout=2.5):
+            # Previous emit still running — wait so we never drop a phrase
+            if not self._busy.acquire(timeout=3.0):
                 log.warning("emit busy — dropping chunk")
                 return False
         try:
