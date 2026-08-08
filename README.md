@@ -42,7 +42,7 @@ Look for **🎙️** in the menu bar.
 
 No Homebrew, Python, or whisper-cpp required on your Mac.
 
-1. Download **[Cero-Transcribe-Install.dmg](https://github.com/K135/Cero-Transcribe/releases)** (or build it below).
+1. Download **[Cero-Transcribe-Install.dmg](https://github.com/K135/Cero-Transcribe/releases/latest)** (~292 MB).
 2. Open the DMG → drag **Cero-Transcribe** into **Applications**.
 3. Open **Applications → Cero-Transcribe**  
    (First launch: **Right-click → Open** if macOS blocks an unidentified developer.)
