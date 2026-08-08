@@ -1,0 +1,23 @@
+# whisper.cpp model binaries
+models/*.bin
+
+# Python
+.venv/
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+.pytest_cache/
+
+# temp audio / logs
+*.wav
+/tmp_audio/
+*.log
+
+# macOS packaging
+dist/
+mac/Cerotrans.iconset/
+mac/*.icns
+
+# macOS
+.DS_Store
