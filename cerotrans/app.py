@@ -12,10 +12,23 @@ from AppKit import NSApp
 from Foundation import NSObject
 import objc
 
-from .config import LOG_FILE, SUPPORT, VOCAB_FILE, ensure_support_dir
+from .config import (
+    LOG_FILE,
+    SUPPORT,
+    VOCAB_FILE,
+    ensure_support_dir,
+    load_settings,
+    save_settings,
+)
 from .focus import FocusTracker
 from .glow import EdgeGlow
-from .hotkey import HOTKEY_LABEL, UNDO_LABEL, HotkeyListener
+from .hotkey import (
+    PRESET_SHORTCUTS,
+    UNDO_LABEL,
+    HotkeyListener,
+    capture_shortcut,
+    shortcut_label,
+)
 from .live_engine import LiveEngine
 from . import login_item
 from .permissions import ensure_all, open_privacy_settings, status_summary
@@ -103,48 +116,76 @@ class CerotransApp(rumps.App):
         self._hud_text = ""
         self._last_history = None
         self._wake: WakeWordWatcher | None = None
+        self._settings = load_settings()
 
-        # Menu
+        # Menu — right-click 🎙️ to open (includes Quit, Hey Cero, shortcuts)
         self.action_item = rumps.MenuItem(START_LABEL, callback=self._on_action_clicked)
+        self.undo_item = rumps.MenuItem(f"Undo last  ({UNDO_LABEL})", callback=self._on_undo_clicked)
+
+        wake_on = bool(self._settings.get("wake_enabled", True))
+        self.wake_item = rumps.MenuItem("Hey Cero: On", callback=self._on_wake_toggle)
+        self.wake_item.state = 1 if wake_on else 0
+
+        toggle_spec = str(self._settings.get("toggle_shortcut") or "alt_r")
+        self.shortcut_item = rumps.MenuItem(f"Toggle shortcut: {shortcut_label(toggle_spec)}")
+        self.shortcut_item.set_callback(None)
+        self._shortcut_presets: dict[str, rumps.MenuItem] = {}
+        for label, spec in PRESET_SHORTCUTS.items():
+            item = rumps.MenuItem(label, callback=self._on_shortcut_preset)
+            item.state = 1 if spec == toggle_spec else 0
+            self._shortcut_presets[label] = item
+        self.custom_shortcut_item = rumps.MenuItem(
+            "Set Custom Shortcut…", callback=self._on_set_custom_shortcut
+        )
+
         self.status_item = rumps.MenuItem("Status: Idle")
         self.status_item.set_callback(None)
         self.level_item = rumps.MenuItem("Mic: ▱▱▱▱▱▱▱▱")
         self.level_item.set_callback(None)
-        self.hotkey_item = rumps.MenuItem(f"Toggle: {HOTKEY_LABEL}")
-        self.hotkey_item.set_callback(None)
-        self.wake_item = rumps.MenuItem('Hey Cero  (say "Hey Cero")', callback=self._on_wake_toggle)
-        self.wake_item.state = 1
-        self.undo_item = rumps.MenuItem(f"Undo last  ({UNDO_LABEL})", callback=self._on_undo_clicked)
+
         self.clear_item = rumps.MenuItem("Clear Context (new email)", callback=self._on_clear_context)
         self.login_item = rumps.MenuItem("Launch at Login", callback=self._on_login_toggle)
         self.login_item.state = 1 if login_item.is_enabled() else 0
         self.vocab_item = rumps.MenuItem("Edit Vocabulary…", callback=self._on_edit_vocab)
+        self.quit_item = rumps.MenuItem("Quit Cero-Transcribe", callback=self._on_quit)
 
         self.menu = [
             self.action_item,
             self.undo_item,
             None,
-            self.status_item,
-            self.level_item,
-            self.hotkey_item,
             self.wake_item,
-            None,
+            self.shortcut_item,
         ]
+        for item in self._shortcut_presets.values():
+            self.menu.add(item)
+        self.menu.add(self.custom_shortcut_item)
+        self.menu.add(None)
+        self.menu.add(self.status_item)
+        self.menu.add(self.level_item)
+        self.menu.add(None)
+
         self._model_items: dict[str, rumps.MenuItem] = {}
         for name in MODEL_FILES:
             item = rumps.MenuItem(name, callback=self._on_model_selected)
             item.state = 1 if name == DEFAULT_MODEL else 0
             self._model_items[name] = item
             self.menu.add(item)
+
         self.menu.add(None)
         self.menu.add(self.clear_item)
         self.menu.add(self.vocab_item)
         self.menu.add(self.login_item)
         self.menu.add(rumps.MenuItem("Grant Permissions…", callback=self._on_grant_permissions))
         self.menu.add(None)
-        self.menu.add(rumps.MenuItem("Quit", callback=self._on_quit))
+        self.menu.add(self.quit_item)
 
-        self.hotkey = HotkeyListener(on_toggle=self._on_toggle, on_undo=self._on_undo)
+        self._refresh_wake_title()
+        self.hotkey = HotkeyListener(
+            on_toggle=self._on_toggle,
+            on_undo=self._on_undo,
+            toggle_shortcut=toggle_spec,
+            undo_shortcut=str(self._settings.get("undo_shortcut") or "cmd+shift+u"),
+        )
         self._model_ready = threading.Event()
         self._meter_timer = rumps.Timer(self._on_meter_tick, 0.2)
         threading.Thread(target=self._load_initial_model, daemon=True).start()
@@ -167,13 +208,15 @@ class CerotransApp(rumps.App):
                     title="Welcome to Cero-Transcribe",
                     message=(
                         "Fully offline voice typing for your Mac.\n\n"
-                        "Next, macOS will ask for permissions:\n"
+                        "Next, macOS will ask for permissions.\n"
+                        "In System Settings, enable toggles for:\n"
+                        "  • Cero-Transcribe  (or “CeroTranscribe”)\n\n"
+                        "Needed:\n"
                         "  1. Microphone — hear you\n"
                         "  2. Accessibility — type into other apps\n"
                         "  3. Input Monitoring — hotkeys\n\n"
                         "Then click 🎙️ in the menu bar (or press Right Option) and speak.\n\n"
-                        "You can re-open Settings anytime via:\n"
-                        "🎙️ → Grant Permissions…"
+                        "Re-open anytime via: 🎙️ → Grant Permissions…"
                     ),
                     ok="Continue",
                 )
@@ -206,11 +249,62 @@ class CerotransApp(rumps.App):
             log.info("Model ready: %s", name)
             # Start low-CPU Hey Cero watcher once model is ready
             self._wake = WakeWordWatcher(self.transcriber, on_wake=self._on_wake_detected)
+            self._wake.set_enabled(bool(self._settings.get("wake_enabled", True)))
             self._wake.start()
             # Glow only while dictating — never while idle/armed
         except Exception as exc:
             log.exception("Model load failed")
             _notify("Model missing", str(exc))
+
+    def _refresh_wake_title(self) -> None:
+        on = bool(self.wake_item.state)
+        self.wake_item.title = "Hey Cero: On" if on else "Hey Cero: Off"
+
+    def _apply_toggle_shortcut(self, spec: str) -> None:
+        spec = (spec or "alt_r").lower()
+        self._settings["toggle_shortcut"] = spec
+        save_settings({"toggle_shortcut": spec})
+        self.hotkey.set_toggle_shortcut(spec)
+        self.shortcut_item.title = f"Toggle shortcut: {shortcut_label(spec)}"
+        for label, item in self._shortcut_presets.items():
+            item.state = 1 if PRESET_SHORTCUTS[label] == spec else 0
+
+    def _on_shortcut_preset(self, sender: rumps.MenuItem) -> None:
+        spec = PRESET_SHORTCUTS.get(sender.title)
+        if not spec:
+            return
+        self._apply_toggle_shortcut(spec)
+        _notify("Shortcut", f"Toggle is now {shortcut_label(spec)}")
+
+    def _on_set_custom_shortcut(self, _sender: rumps.MenuItem) -> None:
+        # Pause global hotkeys while capturing
+        try:
+            self.hotkey.stop()
+        except Exception:
+            pass
+        rumps.alert(
+            title="Set Custom Shortcut",
+            message=(
+                "Click OK, then press your new toggle shortcut.\n\n"
+                "Examples: F5, Ctrl+Space, Cmd+Shift+D, Right Option.\n"
+                "Press Esc to cancel."
+            ),
+            ok="OK — then press keys",
+        )
+
+        def capture() -> None:
+            try:
+                spec = capture_shortcut(timeout_s=10.0)
+            except Exception:
+                log.exception("shortcut capture failed")
+                spec = None
+            # Always restart hotkeys on main-ish thread via rumps timer
+            self._pending_shortcut = spec
+            self._pending_shortcut_done = True
+
+        self._pending_shortcut = None
+        self._pending_shortcut_done = False
+        threading.Thread(target=capture, daemon=True).start()
 
     def _on_wake_detected(self) -> None:
         log.info("Hey Cero detected")
@@ -219,11 +313,14 @@ class CerotransApp(rumps.App):
     def _on_wake_toggle(self, sender: rumps.MenuItem) -> None:
         enabled = not bool(sender.state)
         sender.state = 1 if enabled else 0
+        self._refresh_wake_title()
+        self._settings["wake_enabled"] = enabled
+        save_settings({"wake_enabled": enabled})
         if self._wake is not None:
             self._wake.set_enabled(enabled)
         if self._current_state() == "idle":
             self.glow.hide()
-        _notify("Hey Cero", "On — say Hey Cero" if enabled else "Off")
+        _notify("Hey Cero", "Listening for “Hey Cero”" if enabled else "Stopped")
 
     def _wire_status_click(self) -> None:
         """Left-click toggles; right-click / ctrl-click opens the menu."""
@@ -279,7 +376,10 @@ class CerotransApp(rumps.App):
             self._state = state
         if state == "idle":
             self.title = ICON_IDLE
-            self.status_item.title = 'Status: Idle — say "Hey Cero" or click 🎙️'
+            self.status_item.title = (
+                f'Status: Idle — right-click 🎙️ for menu'
+                + (', or say "Hey Cero"' if self.wake_item.state else "")
+            )
             self.action_item.title = START_LABEL
             self.glow.hide()
         elif state == "recording":
@@ -301,6 +401,20 @@ class CerotransApp(rumps.App):
     def _on_meter_tick(self, _timer: rumps.Timer) -> None:
         try:
             self._pending_glow_armed = False
+
+            # Finish custom-shortcut capture on the main thread
+            if getattr(self, "_pending_shortcut_done", False):
+                self._pending_shortcut_done = False
+                spec = getattr(self, "_pending_shortcut", None)
+                try:
+                    self.hotkey.start()
+                except Exception:
+                    log.exception("restart hotkeys failed")
+                if spec:
+                    self._apply_toggle_shortcut(spec)
+                    _notify("Shortcut", f"Toggle is now {shortcut_label(spec)}")
+                else:
+                    _notify("Shortcut", "Cancelled — keeping previous shortcut.")
 
             if self._pending_wake_start:
                 self._pending_wake_start = False
