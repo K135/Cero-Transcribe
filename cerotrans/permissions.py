@@ -1,4 +1,4 @@
-"""macOS permission checks + System Settings redirects for GoTranscribe."""
+"""macOS permission checks + System Settings redirects for Cero-Transcribe."""
 
 from __future__ import annotations
 
@@ -121,7 +121,7 @@ def open_pane(kind: str) -> None:
 
 
 def open_privacy_settings() -> None:
-    """Open all privacy panes GoTranscribe needs."""
+    """Open all privacy panes Cero-Transcribe needs."""
     for kind in ("microphone", "accessibility", "input"):
         open_pane(kind)
 

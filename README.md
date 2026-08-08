@@ -1,6 +1,6 @@
 # Cero-Transcribe
 
-### Your Mac. Your voice. Full keyboard — hands optional.
+### Your Mac. Your voice. Full keyboard — hands optional. (open source)
 
 **Cero-Transcribe** turns speech into live typing in any app — Chrome, Notes, Slack, Mail, Cursor — fully offline. No cloud. No laggy web demo. Just you talking, and text landing where your cursor already is.
 

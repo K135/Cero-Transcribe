@@ -1,4 +1,4 @@
-"""GoTranscribe menu-bar dictation — live, offline, click-to-toggle."""
+"""Cero-Transcribe menu-bar dictation — live, offline, click-to-toggle."""
 
 from __future__ import annotations
 
