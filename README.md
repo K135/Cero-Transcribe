@@ -1,21 +1,23 @@
-# GoTranscribe
+# Cero-Transcribe
 
-**Offline live dictation for macOS.** Speak into any text field — Chrome, Notes, Slack, Mail, Cursor — and watch polished text appear as you talk. Powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp). **Nothing leaves your Mac.**
+### Your Mac. Your voice. Full keyboard — hands optional.
 
-Menu-bar only (no Dock icon). Tap to start, tap to stop. Wake word **“Hey Cero”** optional.
+**Cero-Transcribe** turns speech into live typing in any app — Chrome, Notes, Slack, Mail, Cursor — fully offline. No cloud. No laggy web demo. Just you talking, and text landing where your cursor already is.
+
+Powered by [whisper.cpp](https://github.com/ggerganov/whisper.cpp). Menu-bar only. Tap to talk. Say *Hey Cero* when you want hands-free.
 
 ---
 
-## Why GoTranscribe
+## Why Cero-Transcribe
 
 | | |
 |---|---|
-| **Fully offline** | Audio never uploads. Models run locally. |
+| **Fully offline** | Audio never uploads. Models run on your Mac. |
 | **Live typing** | Phrases paste into the focused app as you pause. |
-| **Warm Whisper** | Keeps `whisper-server` loaded so the last sentence isn’t stuck loading the model again. |
+| **Warm Whisper** | Keeps `whisper-server` loaded so the last sentence doesn’t stall on a cold model load. |
 | **Voice edits** | Say *delete*, *delete the last sentence*, *comma*, *period*… |
 | **Polished output** | Stutter collapse, ratio fixes (`3 is to 2` → `3:2`), spacing, spoken punctuation. |
-| **Immersive glow** | Right-edge glow only while actively dictating. |
+| **Immersive glow** | Right-edge glow only while you’re actively dictating. |
 
 ---
 
@@ -25,8 +27,8 @@ Menu-bar only (no Dock icon). Tap to start, tap to stop. Wake word **“Hey Cero
 
 ```bash
 brew install portaudio whisper-cpp
-git clone https://github.com/K135/GoTranscribe.git
-cd GoTranscribe
+git clone https://github.com/K135/Cero-Transcribe.git
+cd Cero-Transcribe
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -49,7 +51,7 @@ The app is ad-hoc signed (not Apple-notarized). First open: **Right-click → Op
 
 ## Permissions (required)
 
-GoTranscribe needs three macOS privacy permissions. On first launch it **prompts** and **opens System Settings** for anything missing. You can also use the menu:
+Cero-Transcribe needs three macOS privacy permissions. On first launch it **prompts** and **opens System Settings** for anything missing. You can also use the menu:
 
 **🎙️ → Grant Permissions…**
 
@@ -59,7 +61,7 @@ GoTranscribe needs three macOS privacy permissions. On first launch it **prompts
 | **Accessibility** | Paste / type into other apps | System Settings → Privacy & Security → Accessibility |
 | **Input Monitoring** | Global hotkeys (Right Option, etc.) | System Settings → Privacy & Security → Input Monitoring |
 
-Enable the toggle for **GoTranscribe** (or **Python** / **Terminal** if you run `python run.py` from a terminal).
+Enable the toggle for **Cero-Transcribe** (or **Python** / **Terminal** if you run `python run.py` from a terminal).
 
 After granting Accessibility, **quit and reopen** the app (or the Terminal) so macOS applies the trust.
 
@@ -103,7 +105,7 @@ Say these as their **own phrase** (pause before/after):
 | **Tiny EN** (default) | Speed — snappy live phrases |
 | **Base EN** | Accuracy — slightly slower |
 
-Menu → pick a model. GoTranscribe warms a local `whisper-server` so phrases don’t reload weights every time.
+Menu → pick a model. Cero-Transcribe warms a local `whisper-server` so phrases don’t reload weights every time.
 
 ### Vocabulary
 
@@ -113,9 +115,9 @@ Menu → **Edit Vocabulary…** opens:
 
 ```
 # Prompt hints (one per line)
-GoTranscribe
+Cero-Transcribe
 # Corrections (wrong=right)
-cerotrans=GoTranscribe
+cerotrans=Cero-Transcribe
 myname=Karthik
 ```
 
@@ -130,7 +132,7 @@ Menu → **Clear Context (new email)** — reset capitalization/history when sta
 ## What’s built (architecture)
 
 ```
-GoTranscribe/
+Cero-Transcribe/
   run.py                      # entrypoint
   requirements.txt
   LICENSE                     # MIT
@@ -207,4 +209,4 @@ Whisper models and whisper.cpp are subject to their own licenses (MIT / model ca
 
 - [whisper.cpp](https://github.com/ggerganov/whisper.cpp) — local ASR  
 - [rumps](https://github.com/jaredks/rumps) — macOS menu bar  
-- Built as **GoTranscribe** (writer / offline dictation)
+- **Cero-Transcribe** — fully voice-type on macOS

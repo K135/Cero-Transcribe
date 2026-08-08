@@ -13,9 +13,9 @@
 	<key>CFBundleInfoDictionaryVersion</key>
 	<string>6.0</string>
 	<key>CFBundleName</key>
-	<string>GoTranscribe</string>
+	<string>Cero-Transcribe</string>
 	<key>CFBundleDisplayName</key>
-	<string>GoTranscribe</string>
+	<string>Cero-Transcribe</string>
 	<key>CFBundlePackageType</key>
 	<string>APPL</string>
 	<key>CFBundleShortVersionString</key>
@@ -31,8 +31,8 @@
 	<key>NSHighResolutionCapable</key>
 	<true/>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>GoTranscribe needs the microphone to capture your dictation audio. Audio never leaves your Mac.</string>
+	<string>Cero-Transcribe needs the microphone to capture your dictation audio. Audio never leaves your Mac.</string>
 	<key>NSAppleEventsUsageDescription</key>
-	<string>GoTranscribe pastes transcribed text into the active application.</string>
+	<string>Cero-Transcribe pastes transcribed text into the active application.</string>
 </dict>
 </plist>

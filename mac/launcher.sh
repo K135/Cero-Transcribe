@@ -18,7 +18,7 @@ LOG="${SUPPORT}/launch.log"
 log() { printf '[%s] %s\n' "$(date '+%Y-%m-%d %H:%M:%S')" "$*" >> "${LOG}"; }
 die() {
   log "FATAL: $*"
-  /usr/bin/osascript -e "display dialog \"GoTranscribe could not start.\n\n$*\n\nLog: ${LOG}\" with title \"GoTranscribe\" buttons {\"OK\"} default button 1 with icon stop" 2>/dev/null || true
+  /usr/bin/osascript -e "display dialog \"Cero-Transcribe could not start.\n\n$*\n\nLog: ${LOG}\" with title \"Cero-Transcribe\" buttons {\"OK\"} default button 1 with icon stop" 2>/dev/null || true
   exit 1
 }
 

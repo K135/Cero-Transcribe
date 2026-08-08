@@ -28,7 +28,7 @@ ICON_IDLE = "🎙️"
 ICON_RECORDING = "🔴"
 ICON_TRANSCRIBING = "⏳"
 
-APP_NAME = "GoTranscribe"
+APP_NAME = "Cero-Transcribe"
 START_LABEL = "▶ Start Recording"
 STOP_LABEL = "⏹ Stop Recording"
 
@@ -331,7 +331,7 @@ class CerotransApp(rumps.App):
             open_pane("accessibility")
             _notify(
                 "Accessibility required",
-                "Enable GoTranscribe in System Settings → Privacy → Accessibility, then try again.",
+                "Enable Cero-Transcribe in System Settings → Privacy → Accessibility, then try again.",
             )
             return
         self.focus.remember_now()
@@ -421,7 +421,7 @@ class CerotransApp(rumps.App):
             engine.history.reset()
             engine._context = ""
         self._last_history = None
-        _notify("GoTranscribe", "Context cleared — fresh start.")
+        _notify("Cero-Transcribe", "Context cleared — fresh start.")
 
     def _on_login_toggle(self, sender: rumps.MenuItem) -> None:
         if sender.state:
@@ -431,9 +431,9 @@ class CerotransApp(rumps.App):
         else:
             if login_item.enable():
                 sender.state = 1
-                _notify("Launch at Login", "GoTranscribe will open when you log in.")
+                _notify("Launch at Login", "Cero-Transcribe will open when you log in.")
             else:
-                _notify("Launch at Login", "Could not find GoTranscribe.app bundle.")
+                _notify("Launch at Login", "Could not find Cero-Transcribe.app bundle.")
 
     def _on_edit_vocab(self, _sender: rumps.MenuItem) -> None:
         ensure_support_dir()
