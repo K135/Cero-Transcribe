@@ -105,8 +105,8 @@ If dictation starts but nothing appears in Chrome/Notes, Accessibility is almost
 | **Set Custom Shortcut…** | Capture any key combo you want |
 | **Status: …** | Idle / Recording (live) |
 | **Mic: ▱▱▱…** | Live mic level meter |
-| **Tiny EN** | Faster model (older Macs) |
-| **Base EN** | Best accuracy — **default** ✓ |
+| **Models ▸** | Tiny → Turbo (EN + multilingual). ↓ = download on first use |
+| **Language ▸** | Auto-detect + 100 Whisper languages |
 | **Clear Context (new email)** | Reset capitalization / history for a new doc |
 | **Edit Vocabulary…** | Custom words + corrections |
 | **Launch at Login** | Open Cero-Transcribe when you log in |
@@ -128,12 +128,24 @@ Say these as their **own phrase** (pause before/after):
 
 ### Models
 
-| Model | Best for |
-|-------|----------|
-| **Base EN (default)** | Best accuracy — clean emails, docs, code notes |
-| **Tiny EN** | Maximum speed on older Macs |
+Full OpenAI Whisper size lineup via [whisper.cpp](https://github.com/ggerganov/whisper.cpp) ggml weights. **Tiny EN + Base EN ship in the DMG.** Larger models download once into `~/Library/Application Support/cerotrans/models/` when you select them (then stay offline).
 
-Menu → pick a model. Cero-Transcribe keeps a local `whisper-server` warm so phrases land fast without reloading the model.
+| Size | Parameters | English-only | Multilingual | Relative speed |
+|------|------------|--------------|--------------|----------------|
+| **tiny** | 39 M | Tiny EN | Tiny | ~10x |
+| **base** | 74 M | **Base EN (default)** | Base | ~7x |
+| **small** | 244 M | Small EN | Small | ~4x |
+| **medium** | 769 M | Medium EN | Medium | ~2x |
+| **large** | 1550 M | — | Large (`large-v3`) | 1x |
+| **turbo** | 809 M | — | Turbo (`large-v3-turbo`) | ~8x |
+
+English-only (`.en`) models are best for English. For other languages, pick a multilingual model (or Cero-Transcribe will switch for you). Medium/Large are slower for live dictation on CPU.
+
+Menu → **Models** → pick a size. A warm local `whisper-server` keeps the chosen weights loaded.
+
+### Languages
+
+Menu → **Language** → **Auto-detect** or any of Whisper’s ~100 languages (English, Spanish, Hindi, Japanese, Chinese, Arabic, …). Changing language away from English while on an `.en` model switches to the multilingual twin of the same size (download if needed).
 
 ### Vocabulary
 

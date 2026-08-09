@@ -11,28 +11,33 @@ import subprocess
 import tempfile
 import threading
 import time
-import urllib.error
 import urllib.request
 import wave
 from pathlib import Path
 
 import numpy as np
 
-from .config import load_vocabulary
+from .config import SUPPORT, load_vocabulary
+from .languages import DEFAULT_LANGUAGE, normalize_language
+from .models_catalog import (
+    DEFAULT_MODEL,
+    MODEL_FILES,
+    get_model,
+    model_is_available,
+    resolve_model_path,
+)
 
 log = logging.getLogger("cerotrans.transcriber")
 
-MODEL_FILES = {
-    "Tiny EN": "ggml-tiny.en.bin",
-    "Base EN": "ggml-base.en.bin",
-}
-
-# Base EN is the quality default for clean dictation; Tiny stays in the menu
-# for maximum speed on very old Macs.
-DEFAULT_MODEL = "Base EN"
+# Re-export for app.py / callers
+__all__ = [
+    "DEFAULT_MODEL",
+    "MODEL_FILES",
+    "Transcriber",
+]
 
 
-def _default_models_dir() -> Path:
+def _bundled_models_dir() -> Path:
     env = os.environ.get("CEROTRANS_MODELS_DIR") or os.environ.get("GOTRANSCRIBE_MODELS_DIR")
     if env:
         return Path(env)
@@ -126,9 +131,10 @@ class Transcriber:
     def __init__(self) -> None:
         self._cli = _find_whisper_cli()
         self._server_bin = _find_whisper_server()
-        self._models_dir = _default_models_dir()
+        self._bundled_dir = _bundled_models_dir()
         self._model_name: str | None = None
         self._model_path: Path | None = None
+        self._language = DEFAULT_LANGUAGE
         self._lock = threading.Lock()
         self._server_proc: subprocess.Popen[str] | None = None
         self._server_port: int | None = None
@@ -138,21 +144,55 @@ class Transcriber:
     def model_name(self) -> str | None:
         return self._model_name
 
+    @property
+    def language(self) -> str:
+        return self._language
+
+    @property
+    def bundled_dir(self) -> Path:
+        return self._bundled_dir
+
     def model_path(self, name: str) -> Path:
-        return self._models_dir / MODEL_FILES[name]
+        path = resolve_model_path(name, self._bundled_dir)
+        if path is not None:
+            return path
+        # Expected download destination
+        from .models_catalog import USER_MODELS_DIR, get_model
+
+        return USER_MODELS_DIR / get_model(name).filename
 
     def model_available(self, name: str) -> bool:
-        return self.model_path(name).is_file()
+        return model_is_available(name, self._bundled_dir)
+
+    def set_language(self, code: str, *, restart: bool = True) -> None:
+        """Update spoken language; optionally restart warm server."""
+        lang = normalize_language(code)
+        with self._lock:
+            if lang == self._language and restart:
+                return
+            self._language = lang
+            if restart and self._model_path is not None:
+                self._stop_server_locked()
+                self._start_server_locked()
+        log.info("Language set to %s", lang)
 
     def load(self, name: str) -> None:
         if name not in MODEL_FILES:
             raise ValueError(f"Unknown model: {name}")
-        path = self.model_path(name)
-        if not path.is_file():
+        path = resolve_model_path(name, self._bundled_dir)
+        if path is None or not path.is_file():
             raise FileNotFoundError(
-                f"Model not found: {path}\nRun ./scripts/download_model.sh first."
+                f"Model not found: {name}\n"
+                "Select it in the menu to download, or run ./scripts/download_model.sh"
             )
+        # English-only models cannot run with non-English / auto language
+        info = get_model(name)
         with self._lock:
+            if info.english_only and self._language not in ("en",):
+                raise ValueError(
+                    f"{name} is English-only. Switch Language to English, "
+                    "or pick a multilingual model."
+                )
             self._stop_server_locked()
             self._model_name = name
             self._model_path = path
@@ -161,7 +201,7 @@ class Transcriber:
         try:
             silence = np.zeros(int(0.4 * 16000), dtype=np.float32)
             self.transcribe(silence)
-            log.info("Warmup complete for %s", name)
+            log.info("Warmup complete for %s (lang=%s)", name, self._language)
         except Exception:
             log.exception("Warmup failed (will still try live)")
 
@@ -175,6 +215,7 @@ class Transcriber:
             cli = self._cli
             port = self._server_port
             alive = self._server_alive_locked()
+            language = self._language
         if model_path is None:
             raise RuntimeError("Model not loaded")
         if samples.size == 0:
@@ -198,7 +239,7 @@ class Transcriber:
                     self._stop_server_locked()
                     self._start_server_locked()
 
-        return self._transcribe_cli(cli, model_path, samples, prompt)
+        return self._transcribe_cli(cli, model_path, samples, prompt, language)
 
     # -- server ----------------------------------------------------------
 
@@ -211,10 +252,10 @@ class Transcriber:
             log.info("whisper-server unavailable — using CLI per phrase")
             return
         port = _free_port()
-        support = Path.home() / "Library" / "Application Support" / "cerotrans"
-        support.mkdir(parents=True, exist_ok=True)
-        log_path = support / "whisper-server.log"
+        SUPPORT.mkdir(parents=True, exist_ok=True)
+        log_path = SUPPORT / "whisper-server.log"
         self._server_log = log_path
+        lang = self._language or DEFAULT_LANGUAGE
         cmd = [
             self._server_bin,
             "-m",
@@ -224,10 +265,10 @@ class Transcriber:
             "--port",
             str(port),
             "-l",
-            "en",
+            lang,
             "-t",
             _thread_count(),
-            "-nt",  # no timestamps — much faster for live phrases
+            "-nt",
         ]
         log_f = open(log_path, "ab", buffering=0)  # noqa: SIM115
         try:
@@ -243,8 +284,8 @@ class Transcriber:
             raise
         self._server_proc = proc
         self._server_port = port
-        # Wait until HTTP answers
-        deadline = time.monotonic() + 25
+        # Larger models need longer to load
+        deadline = time.monotonic() + 90
         while time.monotonic() < deadline:
             if proc.poll() is not None:
                 log.error("whisper-server exited early; see %s", log_path)
@@ -256,10 +297,15 @@ class Transcriber:
                     f"http://127.0.0.1:{port}/", timeout=0.4
                 ) as resp:
                     resp.read(64)
-                log.info("whisper-server ready on :%d (%s)", port, self._model_name)
+                log.info(
+                    "whisper-server ready on :%d (%s, lang=%s)",
+                    port,
+                    self._model_name,
+                    lang,
+                )
                 return
             except Exception:
-                time.sleep(0.15)
+                time.sleep(0.2)
         log.error("whisper-server failed to become ready; see %s", log_path)
         self._stop_server_locked()
 
@@ -298,7 +344,7 @@ class Transcriber:
             headers={"Content-Type": content_type},
             method="POST",
         )
-        with urllib.request.urlopen(req, timeout=45) as resp:
+        with urllib.request.urlopen(req, timeout=90) as resp:
             raw = resp.read().decode("utf-8", errors="replace")
         text = self._parse_server_response(raw)
         from .textproc import strip_special_tokens
@@ -336,6 +382,7 @@ class Transcriber:
         model_path: Path,
         samples: np.ndarray,
         prompt: str,
+        language: str,
     ) -> str:
         with tempfile.TemporaryDirectory(prefix="gotranscribe-") as tmp:
             wav_path = Path(tmp) / "utterance.wav"
@@ -347,13 +394,12 @@ class Transcriber:
                 "-f",
                 str(wav_path),
                 "-l",
-                "en",
+                language or DEFAULT_LANGUAGE,
                 "-t",
                 _thread_count(),
                 "-nt",
                 "-np",
             ]
-            # Do NOT pass -ng / -fa: -ng disables GPU; -fa is slow on some CPUs.
             if prompt:
                 cmd.extend(["--prompt", prompt])
             result = subprocess.run(

@@ -35,6 +35,14 @@ from .permissions import ensure_all, open_privacy_settings, status_summary
 from .recorder import Recorder
 from . import sounds
 from .transcriber import DEFAULT_MODEL, MODEL_FILES, Transcriber
+from .models_catalog import MODELS, get_model, multilingual_for
+from .languages import (
+    DEFAULT_LANGUAGE,
+    display_name,
+    language_choices,
+    normalize_language,
+)
+from .model_download import ensure_model, format_progress
 from .wakeword import WakeWordWatcher
 
 ICON_IDLE = "🎙️"
@@ -150,12 +158,30 @@ class CerotransApp(rumps.App):
         self.menu.add(self.level_item)
         self.menu.add(None)
 
+        # Models ▸ (full Whisper size table) + Language ▸
         self._model_items: dict[str, rumps.MenuItem] = {}
-        for name in MODEL_FILES:
-            item = rumps.MenuItem(name, callback=self._on_model_selected)
-            item.state = 1 if name == DEFAULT_MODEL else 0
-            self._model_items[name] = item
-            self.menu.add(item)
+        models_menu = rumps.MenuItem("Models")
+        saved_model = str(self._settings.get("model") or DEFAULT_MODEL)
+        if saved_model not in MODEL_FILES:
+            saved_model = DEFAULT_MODEL
+        for info in MODELS:
+            title = info.label
+            item = rumps.MenuItem(title, callback=self._on_model_selected)
+            item.state = 1 if title == saved_model else 0
+            self._model_items[title] = item
+            models_menu.add(item)
+        self.menu.add(models_menu)
+        self._refresh_model_titles()
+
+        self._language_items: dict[str, rumps.MenuItem] = {}
+        lang_menu = rumps.MenuItem("Language")
+        saved_lang = normalize_language(str(self._settings.get("language") or DEFAULT_LANGUAGE))
+        for code, label in language_choices():
+            item = rumps.MenuItem(label, callback=self._on_language_selected)
+            item.state = 1 if code == saved_lang else 0
+            self._language_items[code] = item
+            lang_menu.add(item)
+        self.menu.add(lang_menu)
 
         self.menu.add(None)
         self.menu.add(self.clear_item)
@@ -224,20 +250,33 @@ class CerotransApp(rumps.App):
 
     def _load_initial_model(self) -> None:
         try:
-            # Prefer Base EN; fall back to Tiny if missing.
-            name = DEFAULT_MODEL
+            lang = normalize_language(str(self._settings.get("language") or DEFAULT_LANGUAGE))
+            self.transcriber.set_language(lang)
+
+            name = str(self._settings.get("model") or DEFAULT_MODEL)
+            if name not in MODEL_FILES:
+                name = DEFAULT_MODEL
+            # English-only models need English language
+            if get_model(name).english_only and lang not in ("en",):
+                sibling = multilingual_for(name)
+                if sibling:
+                    name = sibling
             if not self.transcriber.model_available(name):
-                name = "Tiny EN"
+                # Fall back to bundled defaults
+                for fallback in (DEFAULT_MODEL, "Tiny EN"):
+                    if self.transcriber.model_available(fallback):
+                        name = fallback
+                        break
             self.transcriber.load(name)
+            save_settings({"model": name, "language": lang})
             for item_name, item in self._model_items.items():
                 item.state = 1 if item_name == name else 0
+            self._refresh_model_titles()
             self._model_ready.set()
-            log.info("Model ready: %s", name)
-            # Start low-CPU Hey Cero watcher once model is ready
+            log.info("Model ready: %s (lang=%s)", name, lang)
             self._wake = WakeWordWatcher(self.transcriber, on_wake=self._on_wake_detected)
             self._wake.set_enabled(bool(self._settings.get("wake_enabled", False)))
             self._wake.start()
-            # Glow only while dictating — never while idle/armed
         except Exception as exc:
             log.exception("Model load failed")
             _notify("Model missing", str(exc))
@@ -618,27 +657,120 @@ class CerotransApp(rumps.App):
         open_privacy_settings()
         _notify("Permissions", status_summary(status))
 
+    def _refresh_model_titles(self) -> None:
+        """Mark undownloaded models with ↓ so the menu stays honest."""
+        active = self.transcriber.model_name
+        for label, item in self._model_items.items():
+            available = self.transcriber.model_available(label)
+            item.title = label if available else f"{label}  ↓"
+            item.state = 1 if label == active else 0
+
+    def _model_label_from_menu_title(self, title: str) -> str:
+        return title.replace("  ↓", "").strip()
+
     def _on_model_selected(self, sender: rumps.MenuItem) -> None:
-        name = sender.title
-        if name == self.transcriber.model_name:
+        name = self._model_label_from_menu_title(sender.title)
+        if name not in MODEL_FILES:
             return
-        if not self.transcriber.model_available(name):
-            _notify("Model missing", f"{name} not downloaded.")
+        if name == self.transcriber.model_name and self.transcriber.model_available(name):
             return
 
         def switch() -> None:
             try:
-                self.transcriber.load(name)
+                lang = self.transcriber.language
+                target = name
+                # Non-English / auto requires a multilingual model
+                if get_model(target).english_only and lang not in ("en",):
+                    sibling = multilingual_for(target)
+                    if sibling:
+                        _notify(
+                            "Model",
+                            f"{target} is English-only — switching to {sibling} for {display_name(lang)}.",
+                        )
+                        target = sibling
+                self._download_and_load(target)
             except Exception as exc:
-                _notify("Model load failed", str(exc))
-                return
-            for item_name, item in self._model_items.items():
-                item.state = 1 if item_name == name else 0
-            self._model_ready.set()
-            _notify("Model", f"Switched to {name}")
+                log.exception("model switch failed")
+                _notify("Model", str(exc))
 
         self._model_ready.clear()
         threading.Thread(target=switch, daemon=True).start()
+
+    def _on_language_selected(self, sender: rumps.MenuItem) -> None:
+        # Map display label → code
+        code = None
+        for c, label in language_choices():
+            if label == sender.title:
+                code = c
+                break
+        if code is None:
+            return
+        if code == self.transcriber.language:
+            return
+
+        def switch() -> None:
+            try:
+                current = self.transcriber.model_name or DEFAULT_MODEL
+                target_model = current
+                if code not in ("en",) and get_model(current).english_only:
+                    sibling = multilingual_for(current)
+                    if sibling is None:
+                        # Large/Turbo are already multilingual
+                        sibling = current
+                    _notify(
+                        "Language",
+                        f"{current} is English-only — using {sibling} for {display_name(code)}.",
+                    )
+                    target_model = sibling
+                    self._download_and_load(target_model, language=code)
+                else:
+                    self.transcriber.set_language(code)
+                    save_settings({"language": code})
+                    for c, item in self._language_items.items():
+                        item.state = 1 if c == code else 0
+                    _notify("Language", display_name(code))
+            except Exception as exc:
+                log.exception("language switch failed")
+                _notify("Language", str(exc))
+
+        threading.Thread(target=switch, daemon=True).start()
+
+    def _download_and_load(self, name: str, language: str | None = None) -> None:
+        """Download if needed, load model, optionally set language, update UI."""
+        def progress(label: str, done: int, total: int) -> None:
+            try:
+                self.title = format_progress(label, done, total)
+            except Exception:
+                pass
+
+        if not self.transcriber.model_available(name):
+            info = get_model(name)
+            _notify("Downloading", f"{name} (~{info.approx_mb} MB) — one-time, then offline.")
+            ensure_model(
+                name,
+                bundled_dir=self.transcriber.bundled_dir,
+                on_progress=progress,
+            )
+            try:
+                self.title = ICON_IDLE if self._current_state() == "idle" else self.title
+            except Exception:
+                pass
+
+        if language is not None:
+            # Don't restart on old model — load() below starts server with both.
+            self.transcriber.set_language(language, restart=False)
+            save_settings({"language": language})
+            for c, item in self._language_items.items():
+                item.state = 1 if c == language else 0
+
+        self.transcriber.load(name)
+        save_settings({"model": name})
+        for item_name, item in self._model_items.items():
+            item.state = 1 if item_name == name else 0
+        self._refresh_model_titles()
+        self._model_ready.set()
+        _notify("Model", f"Ready: {name}")
+        log.info("Switched to model %s lang=%s", name, self.transcriber.language)
 
     def _on_quit(self, _sender: rumps.MenuItem) -> None:
         if self._current_state() == "recording":

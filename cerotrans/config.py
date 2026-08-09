@@ -36,7 +36,10 @@ DEFAULT_SETTINGS: dict[str, Any] = {
     "wake_enabled": False,  # opt-in — avoids false starts from “bye Cero” etc.
     "toggle_shortcut": "alt_r",  # Right Option
     "undo_shortcut": "cmd+shift+u",
+    "model": "Base EN",
+    "language": "en",
 }
+
 
 log = logging.getLogger("cerotrans.config")
 
